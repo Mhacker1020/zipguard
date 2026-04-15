@@ -40,6 +40,10 @@ Blog = "https://hivesecurity.gitlab.io"
 [tool.hatch.build.targets.wheel]
 packages = ["src/safe_extract"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

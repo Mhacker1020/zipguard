@@ -57,6 +57,7 @@ def main() -> None:
         prog="safe-extract",
         description="Security-focused archive extraction with policy enforcement",
     )
+    parser.add_argument("--version", action="version", version="safe-extract 0.1.0")
     parser.add_argument("archive", help="Archive file to extract (ZIP supported)")
     parser.add_argument("--out", "-o", default="./extracted", help="Output directory (default: ./extracted)")
     parser.add_argument("--dry-run", action="store_true", help="Analyze without extracting")
