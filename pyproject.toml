@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "safe-extract"
+version = "0.1.0"
+description = "Security-focused archive extraction tool with policy enforcement"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+keywords = ["security", "archive", "zip", "extraction", "zip-slip", "supply-chain"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Archiving :: Compression",
+]
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+
+[project.scripts]
+safe-extract = "safe_extract.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Mhacker1020/safe-extract"
+Repository = "https://github.com/Mhacker1020/safe-extract"
+Issues = "https://github.com/Mhacker1020/safe-extract/issues"
+Blog = "https://hivesecurity.gitlab.io"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/safe_extract"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
