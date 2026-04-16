@@ -1,4 +1,4 @@
-"""CLI entry point for safe-extract."""
+"""CLI entry point for zipguard."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from safe_extract.audit import Decision
-from safe_extract.extractor import SafeExtractor
-from safe_extract.policy import ExtractionPolicy
+from zipguard.audit import Decision
+from zipguard.extractor import SafeExtractor
+from zipguard.policy import ExtractionPolicy
 
 console = Console()
 err_console = Console(stderr=True)
@@ -54,10 +54,10 @@ def _parse_size(value: str) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="safe-extract",
+        prog="zipguard",
         description="Security-focused archive extraction with policy enforcement",
     )
-    parser.add_argument("--version", action="version", version="safe-extract 0.1.0")
+    parser.add_argument("--version", action="version", version="zipguard 0.2.0")
     parser.add_argument("archive", help="Archive file to extract (ZIP supported)")
     parser.add_argument("--out", "-o", default="./extracted", help="Output directory (default: ./extracted)")
     parser.add_argument("--dry-run", action="store_true", help="Analyze without extracting")

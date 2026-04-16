@@ -5,23 +5,23 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from safe_extract.audit import Decision, EntryResult, ExtractionReport
-from safe_extract.formats.base import ArchiveEntry, BaseArchiveReader
-from safe_extract.formats.zip import AmbiguousArchiveError, EncryptedArchiveError, ZipReader
-from safe_extract.policy import ExtractionPolicy
-from safe_extract.validators.content import (
+from zipguard.audit import Decision, EntryResult, ExtractionReport
+from zipguard.formats.base import ArchiveEntry, BaseArchiveReader
+from zipguard.formats.zip import AmbiguousArchiveError, EncryptedArchiveError, ZipReader
+from zipguard.policy import ExtractionPolicy
+from zipguard.validators.content import (
     BlockedExtensionError,
     DoubleExtensionError,
     UnsafeFilenameError,
     validate_filename,
 )
-from safe_extract.validators.path import (
+from zipguard.validators.path import (
     PathTraversalError,
     SymlinkError,
     check_symlink,
     validate_entry_path,
 )
-from safe_extract.validators.resource import (
+from zipguard.validators.resource import (
     FileCountLimitError,
     FileSizeLimitError,
     TotalSizeLimitError,
@@ -157,7 +157,7 @@ class SafeExtractor:
 
         # --- Filename / content validation ---
         try:
-            safe_name = validate_filename(entry.name, self.policy)
+            safe_name, rename_reason = validate_filename(entry.name, self.policy)
         except (UnsafeFilenameError, DoubleExtensionError, BlockedExtensionError) as e:
             return EntryResult(entry.name, Decision.BLOCKED, reason=str(e))
 
@@ -176,7 +176,7 @@ class SafeExtractor:
             decision = Decision.RENAMED if was_renamed else Decision.ALLOWED
             return EntryResult(
                 entry.name, decision,
-                reason="dry-run" if not was_renamed else f"renamed to {safe_name}",
+                reason="dry-run" if not was_renamed else rename_reason,
                 dest=str(dest),
                 file_size=entry.file_size,
             )
@@ -212,7 +212,7 @@ class SafeExtractor:
 
         sha256 = _hash_file(dest) if self.policy.scan_hashes else ""
         decision = Decision.RENAMED if was_renamed else Decision.ALLOWED
-        reason = f"renamed to {safe_name}" if was_renamed else ""
+        reason = rename_reason if was_renamed else ""
 
         return EntryResult(
             entry.name, decision,

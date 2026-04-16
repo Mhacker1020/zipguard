@@ -1,26 +1,52 @@
-# safe-extract
+# zipguard
 
-Security-focused archive extraction with policy enforcement. Prevents Zip Slip, archive bombs, symlink abuse, and malicious file types — before writing anything to disk.
+Security-focused archive extraction with policy enforcement. Prevents Zip Slip, archive bombs, symlink abuse, executable drops, and ZIP64 manipulation — before writing anything to disk.
 
 ```
-$ safe-extract malware_sample.zip --out ./analysis
-Extracting malware_sample.zip → ./analysis
+$ zipguard Autoruns.zip --out ./analysis
+Extracting Autoruns.zip → ./analysis
 
-  Decision   File                    Reason
- ──────────────────────────────────────────────────────────────
-  BLOCKED    ../../evil.exe          Path traversal detected
-  RENAMED    dropper.ps1             renamed to dropper.ps1.blocked
-  BLOCKED    payload.pdf.exe         Double extension spoofing detected
+  Decision    File               Reason
+ ────────────────────────────────────────────────────────────────────────
+  RENAMED     Autoruns.exe       executable extension blocked by policy (.exe)
+  RENAMED     autorunsc.exe      executable extension blocked by policy (.exe)
+  BLOCKED     ../../evil.txt     Path traversal detected
+  BLOCKED     payload.pdf.exe    Double extension spoofing detected
 
-  1 allowed  1 renamed  2 blocked
+  2 allowed  2 renamed  2 blocked
 ```
 
-## Why
+## Why not just use safezip?
 
-Standard archive tools trust the archive. `safe-extract` doesn't.
+[safezip](https://github.com/barseghyanartur/safezip) is a Python library — a drop-in replacement for `zipfile` that adds ZipSlip and ZIP bomb protection. It's a great choice if you're building an application and want safe extraction in your code.
 
-| Attack | 7-Zip / WinRAR | safe-extract |
-|--------|---------------|--------------|
+**zipguard is different.** It's a CLI tool designed for humans and pipelines working with untrusted archives. The core difference:
+
+| Feature | safezip | zipguard |
+|---------|---------|---------|
+| Interface | Python library | CLI + library |
+| Executable blocking (`.exe`, `.ps1`, `.bat`…) | ❌ | ✅ |
+| RTLO filename spoofing detection | ❌ | ✅ |
+| Double extension detection (`doc.pdf.exe`) | ❌ | ✅ |
+| SHA-256 audit log per file | ❌ | ✅ |
+| Rename-vs-block mode (`.exe` → `.exe.blocked`) | ❌ | ✅ |
+| Human-readable decision table | ❌ | ✅ |
+| `--dry-run` / `--verbose` / JSON output | ❌ | ✅ |
+| Atomic writes (no partial files on abort) | ✅ | ✅ |
+| ZIP64 consistency checks | ✅ | ✅ |
+| ZipSlip protection | ✅ | ✅ |
+| ZIP bomb protection | ✅ | ✅ |
+| Recursive nested ZIP extraction | ✅ | ❌ |
+| Zero dependencies | ✅ | ❌ (rich) |
+
+**Use safezip** if you need a lightweight, zero-dependency library embedded in your application.
+
+**Use zipguard** if you're a security analyst, DevOps engineer, or CI pipeline that needs to inspect and audit untrusted ZIP files with full visibility into every decision made.
+
+## What zipguard blocks
+
+| Attack | Standard tools | zipguard |
+|--------|---------------|---------|
 | Zip Slip (`../../evil.exe`) | Extracts to parent dir | Blocked |
 | Absolute path (`/etc/passwd`) | Extracts to root | Blocked |
 | Archive bomb (42.zip) | Fills disk | Aborted |
@@ -28,12 +54,14 @@ Standard archive tools trust the archive. `safe-extract` doesn't.
 | `document.pdf.exe` | Extracts as-is | Blocked |
 | RTLO filename spoofing | Extracts as-is | Blocked |
 | Forged size metadata | Trusts metadata | Counts real bytes |
+| ZIP64 size inconsistency | Trusts header | Aborted |
 | Duplicate entry names | Unpredictable | Aborted |
+| `.exe`, `.ps1`, `.bat` drops | Extracts as-is | Renamed/blocked |
 
 ## Install
 
 ```bash
-pip install safe-extract
+pip install zipguard
 ```
 
 ## Usage
@@ -41,40 +69,40 @@ pip install safe-extract
 ### Basic extraction
 
 ```bash
-safe-extract archive.zip
-safe-extract archive.zip --out ./output_dir
+zipguard archive.zip
+zipguard archive.zip --out ./output_dir
 ```
 
 ### Dry run — analyze without extracting
 
 ```bash
-safe-extract archive.zip --dry-run --verbose
+zipguard archive.zip --dry-run --verbose
 ```
 
 ### JSON output — for automation and CI/CD
 
 ```bash
-safe-extract archive.zip --format json
-safe-extract archive.zip --format json --log audit.json
+zipguard archive.zip --format json
+zipguard archive.zip --format json --log audit.json
 ```
 
 ### Custom limits
 
 ```bash
-safe-extract archive.zip --max-size 50MB
-safe-extract archive.zip --block-ext .exe,.ps1,.lnk
+zipguard archive.zip --max-size 50MB
+zipguard archive.zip --block-ext .exe,.ps1,.lnk
 ```
 
 ### Policy config file
 
 ```bash
-safe-extract archive.zip --config policy.json
+zipguard archive.zip --config policy.json
 ```
 
 ### All options
 
 ```
-safe-extract <archive> [options]
+zipguard <archive> [options]
 
   --out, -o PATH        Output directory (default: ./extracted)
   --dry-run             Analyze without extracting
@@ -131,7 +159,7 @@ Create a `policy.json` to enforce consistent rules across your team or pipeline:
 | `scan_hashes` | `true` | Compute SHA-256 for each extracted file |
 | `block_rtlo` | `true` | Block Unicode Right-to-Left Override filename tricks |
 | `block_double_extension` | `true` | Block `document.pdf.exe` style spoofing |
-| `block_ambiguous_archives` | `true` | Abort if archive has duplicate entry names |
+| `block_ambiguous_archives` | `true` | Abort if archive has duplicate entry names or ZIP64 inconsistencies |
 
 **Default blocked extensions:**
 `.exe .dll .sys .drv .ps1 .psm1 .psd1 .bat .cmd .com .vbs .vbe .js .jse .wsf .wsh .lnk .pif .scr .msi .msp .msc .hta .cpl`
@@ -140,7 +168,7 @@ Create a `policy.json` to enforce consistent rules across your team or pipeline:
 
 ```python
 from pathlib import Path
-from safe_extract import SafeExtractor, ExtractionPolicy
+from zipguard import SafeExtractor, ExtractionPolicy
 
 policy = ExtractionPolicy(
     max_file_size=50 * 1024 * 1024,  # 50 MB
@@ -158,10 +186,10 @@ print(report.to_json())
 
 ### Integration with gate
 
-`safe-extract` is designed to work alongside [gate](https://github.com/Mhacker1020/gate), a supply chain security scanner. Use `gate` to validate packages from registries, and `safe-extract` to safely unpack archive files before inspection:
+`zipguard` works alongside [gate](https://github.com/Mhacker1020/gate), a supply chain security scanner. Use `gate` to validate packages from registries, and `zipguard` to safely unpack archive files before inspection:
 
 ```python
-from safe_extract import SafeExtractor, ExtractionPolicy
+from zipguard import SafeExtractor, ExtractionPolicy
 
 # Safely unpack a downloaded .whl or .tar.gz before analyzing contents
 policy = ExtractionPolicy(rename_blocked=False)  # hard block in CI
@@ -177,8 +205,8 @@ if report.aborted or report.blocked_count > 0:
 # GitHub Actions
 - name: Extract and validate artifact
   run: |
-    pip install safe-extract
-    safe-extract artifact.zip --out ./artifact --format json --log audit.json
+    pip install zipguard
+    zipguard artifact.zip --out ./artifact --format json --log audit.json
     # Exits with code 1 if any entries were blocked
 ```
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import unicodedata
 from pathlib import Path
 
-from safe_extract.policy import ExtractionPolicy
+from zipguard.policy import ExtractionPolicy
 
 # Unicode bidirectional categories that can be used to spoof filenames
 _DANGEROUS_BIDI = frozenset(["R", "AL", "RLE", "RLO", "RLI", "PDF", "PDI"])
@@ -23,10 +23,10 @@ class DoubleExtensionError(ValueError):
     pass
 
 
-def validate_filename(filename: str, policy: ExtractionPolicy) -> str:
+def validate_filename(filename: str, policy: ExtractionPolicy) -> tuple[str, str]:
     """
     Validate filename against policy rules.
-    Returns the (possibly renamed) safe filename.
+    Returns (safe_filename, rename_reason) where rename_reason is empty if not renamed.
     Raises on hard violations.
     """
     name = Path(filename).name  # strip any remaining path components
@@ -37,9 +37,9 @@ def validate_filename(filename: str, policy: ExtractionPolicy) -> str:
     if policy.block_double_extension:
         _check_double_extension(name)
 
-    safe_name = _check_extension(name, policy)
+    safe_name, rename_reason = _check_extension(name, policy)
 
-    return safe_name
+    return safe_name, rename_reason
 
 
 def _check_rtlo(filename: str) -> None:
@@ -80,10 +80,10 @@ def _check_double_extension(filename: str) -> None:
         )
 
 
-def _check_extension(filename: str, policy: ExtractionPolicy) -> str:
+def _check_extension(filename: str, policy: ExtractionPolicy) -> tuple[str, str]:
     """
     Check file extension against block list.
-    Returns original name or renamed name (with .blocked suffix).
+    Returns (safe_name, reason) where reason is empty if not renamed.
     Raises BlockedExtensionError if blocked and rename_blocked=False.
     """
     suffix = Path(filename).suffix.lower()
@@ -91,9 +91,9 @@ def _check_extension(filename: str, policy: ExtractionPolicy) -> str:
 
     if suffix in blocked:
         if policy.rename_blocked:
-            return filename + ".blocked"
+            return filename + ".blocked", f"executable extension blocked by policy ({suffix})"
         raise BlockedExtensionError(
             f"File extension '{suffix}' is blocked by policy: {filename!r}"
         )
 
-    return filename
+    return filename, ""

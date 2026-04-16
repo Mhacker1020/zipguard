@@ -1,13 +1,15 @@
 """Integration tests for SafeExtractor using real ZIP files."""
 
 import io
+import struct
 import zipfile
 import pytest
 from pathlib import Path
 
-from safe_extract.extractor import SafeExtractor
-from safe_extract.policy import ExtractionPolicy
-from safe_extract.audit import Decision
+from zipguard.extractor import SafeExtractor
+from zipguard.policy import ExtractionPolicy
+from zipguard.audit import Decision
+from zipguard.formats.zip import ZIP64ConsistencyError, _check_zip64_consistency
 
 
 def make_zip(tmp_path: Path, entries: dict[str, bytes]) -> Path:
@@ -130,7 +132,7 @@ class TestSafeExtractor:
             zf.writestr("secret.txt", "hidden data")
 
         # Patch the reader to simulate an encrypted entry error
-        from safe_extract.formats.zip import EncryptedArchiveError, ZipReader
+        from zipguard.formats.zip import EncryptedArchiveError, ZipReader
         original_extract = ZipReader.extract_entry
 
         def mock_extract(self, entry, dest, on_chunk=None):
@@ -144,3 +146,60 @@ class TestSafeExtractor:
             assert "encrypted" in report.entries[0].reason.lower()
         finally:
             ZipReader.extract_entry = original_extract
+
+    def test_atomic_write_no_partial_file_on_abort(self, tmp_path):
+        """If extraction is aborted mid-stream, no partial file should remain at dest."""
+        content = b"X" * 5000
+        zpath = make_zip(tmp_path, {"large.bin": content})
+        out = tmp_path / "out"
+
+        # Limit smaller than content — will abort during streaming
+        policy = ExtractionPolicy(max_file_size=1000)
+        report = SafeExtractor(policy).extract(zpath, out)
+
+        assert report.blocked_count == 1
+        # Neither the final dest nor any leftover .zipguard-* temp file
+        assert not (out / "large.bin").exists()
+        leftover_temps = list(out.glob(".zipguard-*")) if out.exists() else []
+        assert leftover_temps == [], f"Leftover temp files: {leftover_temps}"
+
+
+class TestZIP64Consistency:
+
+    def _make_zip64_extra(self, uncompressed: int, compressed: int) -> bytes:
+        """Build a ZIP64 extra field with given size values."""
+        return struct.pack("<HHQQ", 0x0001, 16, uncompressed, compressed)
+
+    def test_matching_zip64_extra_ok(self):
+        info = zipfile.ZipInfo("file.txt")
+        info.file_size = 0xFFFFFFFF
+        info.compress_size = 0xFFFFFFFF
+        info.extra = self._make_zip64_extra(0xFFFFFFFF, 0xFFFFFFFF)
+        # Should not raise
+        _check_zip64_consistency(info)
+
+    def test_mismatched_uncompressed_size_raises(self):
+        info = zipfile.ZipInfo("file.txt")
+        info.file_size = 1000
+        info.compress_size = 500
+        # ZIP64 extra claims different uncompressed size
+        info.extra = struct.pack("<HHQQ", 0x0001, 16, 9999, 500)
+        with pytest.raises(ZIP64ConsistencyError, match="ZIP64 size mismatch"):
+            _check_zip64_consistency(info)
+
+    def test_mismatched_compressed_size_raises(self):
+        info = zipfile.ZipInfo("file.txt")
+        info.file_size = 1000
+        info.compress_size = 500
+        # ZIP64 extra claims different compressed size
+        info.extra = struct.pack("<HHQQQ", 0x0001, 24, 1000, 9999, 0)
+        with pytest.raises(ZIP64ConsistencyError, match="compressed size mismatch"):
+            _check_zip64_consistency(info)
+
+    def test_no_zip64_extra_ok(self):
+        info = zipfile.ZipInfo("file.txt")
+        info.file_size = 100
+        info.compress_size = 80
+        info.extra = b""
+        # No ZIP64 field — should pass silently
+        _check_zip64_consistency(info)

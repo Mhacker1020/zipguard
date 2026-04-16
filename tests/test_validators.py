@@ -3,10 +3,10 @@
 import pytest
 from pathlib import Path
 
-from safe_extract.policy import ExtractionPolicy
-from safe_extract.validators.path import validate_entry_path, check_symlink, PathTraversalError, SymlinkError
-from safe_extract.validators.content import validate_filename, UnsafeFilenameError, DoubleExtensionError, BlockedExtensionError
-from safe_extract.validators.resource import ResourceTracker, FileSizeLimitError, CompressionRatioError, FileCountLimitError
+from zipguard.policy import ExtractionPolicy
+from zipguard.validators.path import validate_entry_path, check_symlink, PathTraversalError, SymlinkError
+from zipguard.validators.content import validate_filename, UnsafeFilenameError, DoubleExtensionError, BlockedExtensionError
+from zipguard.validators.resource import ResourceTracker, FileSizeLimitError, CompressionRatioError, FileCountLimitError
 
 
 # --- Path traversal ---
@@ -53,12 +53,15 @@ class TestSymlinkValidation:
 class TestFilenameValidation:
     def test_normal_file(self):
         policy = ExtractionPolicy()
-        assert validate_filename("document.pdf", policy) == "document.pdf"
+        safe_name, reason = validate_filename("document.pdf", policy)
+        assert safe_name == "document.pdf"
+        assert reason == ""
 
     def test_blocked_extension_rename(self):
         policy = ExtractionPolicy(rename_blocked=True)
-        result = validate_filename("malware.exe", policy)
-        assert result == "malware.exe.blocked"
+        safe_name, reason = validate_filename("malware.exe", policy)
+        assert safe_name == "malware.exe.blocked"
+        assert ".exe" in reason
 
     def test_blocked_extension_hard_block(self):
         policy = ExtractionPolicy(rename_blocked=False)
@@ -79,8 +82,9 @@ class TestFilenameValidation:
     def test_double_extension_allowed_when_disabled(self):
         policy = ExtractionPolicy(block_double_extension=False)
         # Should not raise, but the .exe will be renamed
-        result = validate_filename("document.pdf.exe", policy)
-        assert result == "document.pdf.exe.blocked"
+        safe_name, reason = validate_filename("document.pdf.exe", policy)
+        assert safe_name == "document.pdf.exe.blocked"
+        assert ".exe" in reason
 
 
 # --- Resource limits ---

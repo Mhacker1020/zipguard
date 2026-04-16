@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from safe_extract.policy import ExtractionPolicy
+from zipguard.policy import ExtractionPolicy
 
 
 class FileSizeLimitError(ValueError):

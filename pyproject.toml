@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "safe-extract"
-version = "0.1.0"
+name = "zipguard"
+version = "0.2.0"
 description = "Security-focused archive extraction tool with policy enforcement"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,16 +29,16 @@ dependencies = [
 dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 
 [project.scripts]
-safe-extract = "safe_extract.cli:main"
+zipguard = "zipguard.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Mhacker1020/safe-extract"
-Repository = "https://github.com/Mhacker1020/safe-extract"
-Issues = "https://github.com/Mhacker1020/safe-extract/issues"
+Homepage = "https://github.com/Mhacker1020/zipguard"
+Repository = "https://github.com/Mhacker1020/zipguard"
+Issues = "https://github.com/Mhacker1020/zipguard/issues"
 Blog = "https://hivesecurity.gitlab.io"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/safe_extract"]
+packages = ["src/zipguard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
