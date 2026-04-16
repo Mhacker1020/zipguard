@@ -21,9 +21,7 @@ classifiers = [
     "Topic :: Security",
     "Topic :: System :: Archiving :: Compression",
 ]
-dependencies = [
-    "rich>=13.0.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "ruff", "mypy"]

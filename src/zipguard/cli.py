@@ -7,23 +7,32 @@ import json
 import sys
 from pathlib import Path
 
-from rich.console import Console
-from rich.table import Table
-from rich import box
-
 from zipguard.audit import Decision
 from zipguard.extractor import SafeExtractor
 from zipguard.policy import ExtractionPolicy
 
-console = Console()
-err_console = Console(stderr=True)
+# ANSI color codes
+_R = "\033[0m"       # reset
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_RED = "\033[31m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
 
-_DECISION_STYLE = {
-    Decision.ALLOWED: "green",
-    Decision.RENAMED: "yellow",
-    Decision.BLOCKED: "red",
-    Decision.SKIPPED: "dim",
+_DECISION_COLOR = {
+    Decision.ALLOWED: _GREEN,
+    Decision.RENAMED: _YELLOW,
+    Decision.BLOCKED: _RED,
+    Decision.SKIPPED: _DIM,
 }
+
+
+def _c(color: str, text: str) -> str:
+    return f"{color}{text}{_R}"
+
+
+def _err(msg: str) -> None:
+    print(msg, file=sys.stderr)
 
 
 def build_policy(args: argparse.Namespace) -> ExtractionPolicy:
@@ -72,64 +81,68 @@ def main() -> None:
 
     archive = Path(args.archive)
     if not archive.exists():
-        err_console.print(f"[red]Error:[/red] Archive not found: {archive}")
+        _err(f"{_c(_RED, 'Error:')} Archive not found: {archive}")
         sys.exit(1)
 
     policy = build_policy(args)
     extractor = SafeExtractor(policy)
 
     if args.dry_run:
-        console.print(f"[dim]Dry run — analyzing[/dim] [bold]{archive.name}[/bold]")
+        print(f"{_c(_DIM, 'Dry run — analyzing')} {_c(_BOLD, archive.name)}")
     else:
-        console.print(f"[dim]Extracting[/dim] [bold]{archive.name}[/bold] [dim]→[/dim] {args.out}")
+        print(f"{_c(_DIM, 'Extracting')} {_c(_BOLD, archive.name)} {_c(_DIM, '→')} {args.out}")
 
     report = extractor.extract(archive, Path(args.out), dry_run=args.dry_run)
 
     if report.aborted:
-        err_console.print(f"\n[bold red]ABORTED:[/bold red] {report.abort_reason}")
+        _err(f"\n{_c(_RED, _c(_BOLD, 'ABORTED:'))} {report.abort_reason}")
         sys.exit(2)
 
     if args.format == "json":
-        console.print(report.to_json())
+        print(report.to_json())
     else:
         _print_table(report, verbose=args.verbose)
 
     if args.log:
         report.save(Path(args.log))
-        console.print(f"\n[dim]Audit log saved to {args.log}[/dim]")
+        print(f"\n{_c(_DIM, f'Audit log saved to {args.log}')}")
 
-    blocked = report.blocked_count
-    sys.exit(1 if blocked > 0 and not args.dry_run else 0)
+    sys.exit(1 if report.blocked_count > 0 and not args.dry_run else 0)
 
 
 def _print_table(report, verbose: bool) -> None:
-    table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
-    table.add_column("Decision", width=9)
-    table.add_column("File")
-    table.add_column("Reason", style="dim")
+    COL_DECISION = 11
+    COL_FILE = 40
 
-    for entry in report.entries:
-        if not verbose and entry.decision in (Decision.ALLOWED, Decision.SKIPPED):
-            continue
-        style = _DECISION_STYLE.get(entry.decision, "")
-        table.add_row(
-            f"[{style}]{entry.decision.value.upper()}[/{style}]",
-            entry.name,
-            entry.reason,
+    rows = [
+        entry for entry in report.entries
+        if verbose or entry.decision not in (Decision.ALLOWED, Decision.SKIPPED)
+    ]
+
+    if rows or verbose:
+        header = (
+            f"  {'Decision':<{COL_DECISION}}{'File':<{COL_FILE}}Reason"
         )
-
-    if table.row_count > 0 or verbose:
-        console.print(table)
+        print(f"\n{_c(_BOLD, header)}")
+        print(" " + "─" * (COL_DECISION + COL_FILE + 40))
+        for entry in rows:
+            color = _DECISION_COLOR.get(entry.decision, "")
+            decision = _c(color, f"{entry.decision.value.upper():<{COL_DECISION}}")
+            filename = f"{entry.name:<{COL_FILE}}"
+            reason = _c(_DIM, entry.reason) if entry.reason else ""
+            print(f"  {decision}{filename}{reason}")
+        print()
 
     # Summary line
     s = report.to_dict()["summary"]
-    parts = [f"[green]{s['allowed']} allowed[/green]"]
+    parts = [_c(_GREEN, f"{s['allowed']} allowed")]
     if s["renamed"]:
-        parts.append(f"[yellow]{s['renamed']} renamed[/yellow]")
+        parts.append(_c(_YELLOW, f"{s['renamed']} renamed"))
     if s["blocked"]:
-        parts.append(f"[red]{s['blocked']} blocked[/red]")
+        parts.append(_c(_RED, f"{s['blocked']} blocked"))
 
-    console.print("  " + "  ".join(parts))
+    print("  " + "  ".join(parts))
 
     if report.blocked_count == 0 and not verbose:
-        console.print(f"  [dim]All {s['total']} entries passed — use --verbose to see details[/dim]")
+        total = s['total']
+        print(f"  {_c(_DIM, f'All {total} entries passed — use --verbose to see details')}")

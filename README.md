@@ -37,7 +37,7 @@ Extracting Autoruns.zip → ./analysis
 | ZipSlip protection | ✅ | ✅ |
 | ZIP bomb protection | ✅ | ✅ |
 | Recursive nested ZIP extraction | ✅ | ❌ |
-| Zero dependencies | ✅ | ❌ (rich) |
+| Zero dependencies | ✅ | ✅ |
 
 **Use safezip** if you need a lightweight, zero-dependency library embedded in your application.
 
