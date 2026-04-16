@@ -61,8 +61,10 @@ Extracting Autoruns.zip → ./analysis
 ## Install
 
 ```bash
-pip install zipguard
+pip install git+https://github.com/Mhacker1020/zipguard.git
 ```
+
+> PyPI release coming soon.
 
 ## Usage
 
@@ -205,7 +207,7 @@ if report.aborted or report.blocked_count > 0:
 # GitHub Actions
 - name: Extract and validate artifact
   run: |
-    pip install zipguard
+    pip install git+https://github.com/Mhacker1020/zipguard.git
     zipguard artifact.zip --out ./artifact --format json --log audit.json
     # Exits with code 1 if any entries were blocked
 ```
